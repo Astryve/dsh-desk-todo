@@ -1,0 +1,44 @@
+{
+  "name": "dsh-desk-todo",
+  "version": "1.0.0",
+  "description": "DSH 桌面待办挂件：把「本周待办 + 长期任务」贴在桌面上，到点弹窗 + 提示音提醒。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "todo",
+    "desktop",
+    "widget",
+    "reminder",
+    "待办",
+    "桌面挂件"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.1-rc.5": "compatible",
+        "0.2.2-rc.1": "compatible"
+      }
+    }
+  }
+}

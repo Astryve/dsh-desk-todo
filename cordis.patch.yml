@@ -1,0 +1,20 @@
+---
+# dsh-desk-todo — profile patch layer.
+#
+# 只做一件事：往 cordis 加载器里插一条条目（id + 包名），
+# 宿主半身（lib/index.js）负责把桌面挂件窗口创建出来。
+#
+# 覆盖方式：在 ~/.dsh/profiles/<profile>/cordis.patch.yml 里再写一条同 id 的条目，
+# 注意 config 是「整体替换」而不是深合并，缺的键由插件自己的默认值补齐。
+- insert:
+    - id: desk-todo
+      name: 'dsh-desk-todo'
+      config:
+        width: 520            # 首次创建的宽度（之后跟随 data.json 里记住的尺寸）
+        height: 330
+        opacity: 0.85         # 背景不透明度 0.25 ~ 0.95
+        top: 16               # 距离屏幕上/右边缘的像素
+        right: 16
+        alwaysOnTop: false    # 默认沉在最底层，不挡其它窗口；true = 始终置顶
+        startHidden: false    # true = 装好后先隐藏，从托盘再显示
+        silent: false         # true = 只弹窗不出声

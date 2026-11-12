@@ -1,0 +1,16 @@
+{
+  "semester": { "name": "2026-2027 秋", "week1Monday": "2026-08-31" },
+  "events": [
+    { "id": "demo-1", "title": "数值分析", "day": "2026-11-12",
+      "start": "13:30", "end": "16:40", "place": "武进阶教楼W3阶",
+      "color": "gold", "remindMin": 15, "repeat": "weekly", "note": "带上次的作业" },
+    { "id": "demo-2", "title": "交课程论文", "day": "2026-11-15",
+      "start": "20:00", "end": "20:30", "place": "",
+      "color": "pink", "remindMin": 30, "repeat": "none", "note": "" }
+  ],
+  "longterm": [
+    { "id": "lt-1", "title": "毕业设计开题", "due": "2026-12-20", "done": false, "note": "" },
+    { "id": "lt-2", "title": "英语六级报名", "due": "2026-11-25", "done": false, "note": "别忘缴费" }
+  ],
+  "settings": { "w": 520, "h": 330, "x": null, "y": 16, "opacity": 0.85 }
+}
