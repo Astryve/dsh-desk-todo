@@ -1,7 +1,7 @@
 {
   "name": "dsh-desk-todo",
-  "version": "1.0.0",
-  "description": "DSH 桌面待办挂件：把「本周待办 + 长期任务」贴在桌面上，到点弹窗 + 提示音提醒。",
+  "version": "1.1.0",
+  "description": "DSH 桌面待办挂件：把「本周待办 + 长期任务」贴在桌面上，到点弹窗 + 提示音提醒（WPF 实现，零额外运行时）。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -10,6 +10,7 @@
   },
   "files": [
     "lib",
+    "win",
     "assets",
     "cordis.patch.yml",
     "README.md",
@@ -40,5 +41,8 @@
         "0.2.2-rc.1": "compatible"
       }
     }
-  }
+  },
+  "os": [
+    "win32"
+  ]
 }
