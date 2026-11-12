@@ -101,6 +101,9 @@ $xaml = @"
     </Style>
   </Window.Resources>
   <Border x:Name="Root" CornerRadius="12" BorderThickness="1" BorderBrush="#2AFFFFFF">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.55" Color="#000000"/>
+    </Border.Effect>
     <Border.Background>
       <SolidColorBrush Color="#0A111D" Opacity="$Opacity" />
     </Border.Background>
@@ -111,6 +114,8 @@ $xaml = @"
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="BtnAdd" Content="＋" Width="24" Height="20" FontSize="12" Margin="0,0,4,0"
                     Background="#22FFFFFF" Foreground="#EAF1FF" BorderThickness="0" ToolTip="新增待办"/>
+            <Button x:Name="BtnCfg" Content="⚙" Width="24" Height="20" FontSize="12" Margin="0,0,4,0"
+                    Background="#22FFFFFF" Foreground="#EAF1FF" BorderThickness="0" ToolTip="设置"/>
             <Button x:Name="BtnClose" Content="－" Width="24" Height="20" FontSize="12"
                     Background="#22FFFFFF" Foreground="#EAF1FF" BorderThickness="0" ToolTip="隐藏"/>
           </StackPanel>
@@ -122,11 +127,11 @@ $xaml = @"
           <ColumnDefinition Width="1"/>
           <ColumnDefinition Width="1*"/>
         </Grid.ColumnDefinitions>
-        <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="4,2,2,4">
+        <ScrollViewer x:Name="WeekScroll" Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="4,2,2,4">
           <StackPanel x:Name="WeekPanel"/>
         </ScrollViewer>
         <Rectangle Grid.Column="1" Fill="#26FFFFFF"/>
-        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="4,2,2,4">
+        <ScrollViewer x:Name="LongScroll" Grid.Column="2" VerticalScrollBarVisibility="Auto" Padding="4,2,2,4">
           <StackPanel x:Name="LongPanel"/>
         </ScrollViewer>
       </Grid>
@@ -137,7 +142,7 @@ $xaml = @"
 
 $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
 $win = [Windows.Markup.XamlReader]::Load($reader)
-foreach ($n in 'Root','Header','Title','BtnAdd','BtnClose','WeekPanel','LongPanel') {
+foreach ($n in 'Root','Header','Title','BtnAdd','BtnClose','BtnCfg','WeekPanel','LongPanel','WeekScroll','LongScroll') {
   Set-Variable -Name $n -Value $win.FindName($n) -Scope Script
 }
 
@@ -174,9 +179,11 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
   $border = New-Object System.Windows.Controls.Border
   $border.CornerRadius = New-Object System.Windows.CornerRadius 7
   $border.Background = Brush '#14FFFFFF'
-  $border.Margin = New-Object System.Windows.Thickness 0,0,0,3
-  $border.Padding = New-Object System.Windows.Thickness 6,3,6,3
+  $border.Margin = New-Object System.Windows.Thickness 0,0,0,4
+  $border.Padding = New-Object System.Windows.Thickness 7,4,7,4
   $border.Cursor = [System.Windows.Input.Cursors]::Hand
+  $border.Add_MouseEnter({ param($s, $e) try { $s.Background = Brush '#2EFFFFFF' } catch { } })
+  $border.Add_MouseLeave({ param($s, $e) try { $s.Background = Brush '#14FFFFFF' } catch { } })
   if ($past) { $border.Opacity = 0.45 }
 
   $grid = New-Object System.Windows.Controls.Grid
@@ -200,7 +207,7 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
   if ($isLong) {
     $line = New-Object System.Windows.Controls.StackPanel
     $line.Orientation = 'Horizontal'
-    $t1 = New-TextBlock $ev.title 12.5 '#EAF1FF'
+    $t1 = New-TextBlock $ev.title 13 '#EAF1FF'
     $t1.Width = 150
     $line.Children.Add($t1) | Out-Null
     $dueTxt = ''; $dueColor = '#AFC4E6'
@@ -211,7 +218,7 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
       elseif ($left -eq 0) { $dueTxt = '今天'; $dueColor = '#FF8A8A' }
       else { $dueTxt = "$left 天"; if ($left -le 3) { $dueColor = '#FF8A8A' } elseif ($left -le 10) { $dueColor = '#FFCC66' } }
     }
-    $t2 = New-TextBlock $dueTxt 11 $dueColor
+    $t2 = New-TextBlock $dueTxt 11.5 $dueColor
     $t2.HorizontalAlignment = 'Right'
     $line.Children.Add($t2) | Out-Null
     $sp.Children.Add($line) | Out-Null
@@ -224,10 +231,10 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
 
   $line = New-Object System.Windows.Controls.StackPanel
   $line.Orientation = 'Horizontal'
-  $tTime = New-TextBlock ([string]$ev.start) 12 '#EAF1FF' 'Bold'
+  $tTime = New-TextBlock ([string]$ev.start) 12.5 '#EAF1FF' 'Bold'
   $tTime.Width = 44
   $line.Children.Add($tTime) | Out-Null
-  $tTitle = New-TextBlock ([string]$ev.title) 12.5 '#EAF1FF'
+  $tTitle = New-TextBlock ([string]$ev.title) 13 '#EAF1FF'
   $line.Children.Add($tTitle) | Out-Null
   $sp.Children.Add($line) | Out-Null
 
@@ -235,7 +242,7 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
   $pl = Abbrev ([string]$ev.place)
   if ($pl) { $sub += $pl }
   if ($sub.Count -gt 0) {
-    $tSub = New-TextBlock ($sub -join ' · ') 10.5 '#9FB4D6'
+    $tSub = New-TextBlock ($sub -join ' · ') 11 '#9FB4D6'
     $sp.Children.Add($tSub) | Out-Null
   }
   $grid.Children.Add($sp) | Out-Null
@@ -278,12 +285,12 @@ function Render {
     $events = $events | Sort-Object { Mins ([string]$_.start) }
 
     $head = if ($i -eq 0) { '今天' } elseif ($i -eq 1) { '明天' } else { $wd[[int]$day.DayOfWeek] }
-    $hl = New-TextBlock ("$head · $($day.Month)/$($day.Day)") 10.5 ($(if ($i -eq 0) { '#64D2FF' } else { '#8FA6C8' })) ($(if ($i -eq 0) { 'Bold' } else { 'Normal' }))
+    $hl = New-TextBlock ("$head · $($day.Month)/$($day.Day)") 11 ($(if ($i -eq 0) { '#64D2FF' } else { '#8FA6C8' })) ($(if ($i -eq 0) { 'Bold' } else { 'Normal' }))
     $hl.Margin = New-Object System.Windows.Thickness 2,5,0,2
     $WeekPanel.Children.Add($hl) | Out-Null
 
     if ($events.Count -eq 0) {
-      $empty = New-TextBlock '——' 10 '#44597A'
+      $empty = New-TextBlock '——' 10 '#5A6E8C'
       $empty.Margin = New-Object System.Windows.Thickness 6,0,0,2
       $WeekPanel.Children.Add($empty) | Out-Null
       continue
@@ -294,6 +301,7 @@ function Render {
     }
   }
 
+  try { $WeekScroll.ScrollToTop() } catch { }
   $longs = @()
   if ($script:Data.longterm) { $longs = $script:Data.longterm | Sort-Object { if ($_.due) { $_.due } else { '9999-99-99' } } }
   if ($longs.Count -eq 0) {
@@ -408,6 +416,92 @@ function Show-Detail($ev, [string]$kind, [string]$dateKey) {
   $b.Child = $sp
   $w.Content = $b
   $w.Add_MouseLeftButtonDown({ try { (Get-Process -Id $PID).Refresh(); } catch {} })
+  $w.ShowDialog() | Out-Null
+}
+
+
+function Show-Settings {
+  $w = New-Object System.Windows.Window
+  $w.WindowStyle = 'None'; $w.AllowsTransparency = $true; $w.Background = 'Transparent'
+  $w.ShowInTaskbar = $false; $w.Topmost = $true
+  $w.Width = 320; $w.Height = 260
+  $w.WindowStartupLocation = 'CenterOwner'; $w.Owner = $win
+
+  $b = New-Object System.Windows.Controls.Border
+  $b.CornerRadius = New-Object System.Windows.CornerRadius 10
+  $b.Background = Brush '#F0142136'
+  $b.BorderBrush = Brush '#5964D2FF'
+  $b.BorderThickness = New-Object System.Windows.Thickness 1
+  $b.Padding = New-Object System.Windows.Thickness 12
+  $sp = New-Object System.Windows.Controls.StackPanel
+
+  $t = New-TextBlock '设置' 13 '#EAF1FF' 'Bold'
+  $sp.Children.Add($t) | Out-Null
+
+  $lw = New-TextBlock '宽度 / 高度' 10.5 '#7F93B3'
+  $lw.Margin = New-Object System.Windows.Thickness 0,8,0,3
+  $sp.Children.Add($lw) | Out-Null
+
+  $row = New-Object System.Windows.Controls.StackPanel
+  $row.Orientation = 'Horizontal'
+  $tw = New-Object System.Windows.Controls.TextBox
+  $tw.Width = 70; $tw.Text = [string][int]$win.Width; $tw.Background = Brush '#22FFFFFF'
+  $tw.Foreground = Brush '#EAF1FF'; $tw.BorderThickness = 0; $tw.Padding = New-Object System.Windows.Thickness 4
+  $row.Children.Add($tw) | Out-Null
+  $x1 = New-TextBlock ' × ' 12 '#9FB4D6'; $x1.VerticalAlignment = 'Center'
+  $row.Children.Add($x1) | Out-Null
+  $th = New-Object System.Windows.Controls.TextBox
+  $th.Width = 70; $th.Text = [string][int]$win.Height; $th.Background = Brush '#22FFFFFF'
+  $th.Foreground = Brush '#EAF1FF'; $th.BorderThickness = 0; $th.Padding = New-Object System.Windows.Thickness 4
+  $row.Children.Add($th) | Out-Null
+  $sp.Children.Add($row) | Out-Null
+
+  $lo = New-TextBlock '背景不透明度' 10.5 '#7F93B3'
+  $lo.Margin = New-Object System.Windows.Thickness 0,10,0,3
+  $sp.Children.Add($lo) | Out-Null
+
+  $sl = New-Object System.Windows.Controls.Slider
+  $sl.Minimum = 0.3; $sl.Maximum = 0.95; $sl.TickFrequency = 0.05
+  $curOp = 0.85
+  try { if ($script:Data.settings.opacity) { $curOp = [double]$script:Data.settings.opacity } } catch { }
+  $sl.Value = $curOp
+  $sp.Children.Add($sl) | Out-Null
+
+  $btns = New-Object System.Windows.Controls.StackPanel
+  $btns.Orientation = 'Horizontal'; $btns.Margin = New-Object System.Windows.Thickness 0,12,0,0
+  $ok = New-Object System.Windows.Controls.Button
+  $ok.Content = '应用'; $ok.Padding = New-Object System.Windows.Thickness 12,4,12,4
+  $ok.Background = Brush '#3364D2FF'; $ok.Foreground = Brush '#EAF1FF'; $ok.BorderThickness = 0; $ok.FontSize = 12
+  $btns.Children.Add($ok) | Out-Null
+  $cancel = New-Object System.Windows.Controls.Button
+  $cancel.Content = '取消'; $cancel.Padding = New-Object System.Windows.Thickness 12,4,12,4
+  $cancel.Margin = New-Object System.Windows.Thickness 8,0,0,0
+  $cancel.Background = Brush '#22FFFFFF'; $cancel.Foreground = Brush '#EAF1FF'; $cancel.BorderThickness = 0; $cancel.FontSize = 12
+  $btns.Children.Add($cancel) | Out-Null
+  $sp.Children.Add($btns) | Out-Null
+
+  $b.Child = $sp; $w.Content = $b
+
+  $cancel.Add_Click({ $w.Close() })
+  $ok.Add_Click({
+    $nw = 520; $nh = 330
+    [void][int]::TryParse($tw.Text, [ref]$nw)
+    [void][int]::TryParse($th.Text, [ref]$nh)
+    if ($nw -lt 300) { $nw = 300 }; if ($nw -gt 960) { $nw = 960 }
+    if ($nh -lt 140) { $nh = 140 }; if ($nh -gt 680) { $nh = 680 }
+    $win.Width = $nw; $win.Height = $nh
+    $op = [math]::Round($sl.Value, 2)
+    $Root.Background = New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.Color]::FromArgb([byte](255*$op), 10, 17, 29))
+    $d = Read-Data
+    if ($d) {
+      if (-not $d.settings) { $d | Add-Member -NotePropertyName settings -NotePropertyValue ([pscustomobject]@{}) -Force }
+      $d.settings | Add-Member -NotePropertyName w -NotePropertyValue $nw -Force
+      $d.settings | Add-Member -NotePropertyName h -NotePropertyValue $nh -Force
+      $d.settings | Add-Member -NotePropertyName opacity -NotePropertyValue $op -Force
+      Write-Data $d
+    }
+    $w.Close()
+  })
   $w.ShowDialog() | Out-Null
 }
 
@@ -610,6 +704,7 @@ $win.Add_LocationChanged({
   } catch { }
 })
 $BtnAdd.Add_Click({ Show-QuickAdd })
+$BtnCfg.Add_Click({ Show-Settings })
 $BtnClose.Add_Click({ $win.Hide() })
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
