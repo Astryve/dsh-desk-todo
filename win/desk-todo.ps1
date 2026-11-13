@@ -56,6 +56,14 @@ function Abbrev([string]$place) {
   return $s.Trim()
 }
 
+
+function Log-Ui([string]$msg) {
+  try {
+    $p = Join-Path $env:TEMP 'desk-todo-ui.log'
+    Add-Content -LiteralPath $p -Value ((Get-Date).ToString('HH:mm:ss') + ' ' + $msg) -Encoding UTF8
+  } catch { }
+}
+
 function Brush([string]$hex) {
   return (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString($hex)))
 }
@@ -225,7 +233,8 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
     $grid.Children.Add($sp) | Out-Null
     $panel.Children.Add($border) | Out-Null
     $border.Child = $grid
-    $border.Add_MouseLeftButtonUp({ param($s, $e) Show-Detail $ev 'long' '' })
+    $border.Tag = @{ kind = 'long'; id = [string]$ev.id; date = '' }
+    $border.Add_MouseLeftButtonUp({ param($s, $e) Show-DetailById $s.Tag })
     return
   }
 
@@ -248,7 +257,8 @@ function Add-Item($panel, $ev, [string]$kind, [string]$dateKey, [bool]$past, [bo
   $grid.Children.Add($sp) | Out-Null
   $border.Child = $grid
   $panel.Children.Add($border) | Out-Null
-  $border.Add_MouseLeftButtonUp({ param($s, $e) Show-Detail $ev 'event' $dateKey })
+  $border.Tag = @{ kind = 'event'; id = [string]$ev.id; date = $dateKey }
+  $border.Add_MouseLeftButtonUp({ param($s, $e) Show-DetailById $s.Tag })
 }
 
 function Render {
@@ -314,44 +324,47 @@ function Render {
 }
 
 # ───────────── 详情 / 编辑 ─────────────
+
+function Show-DetailById($tag) {
+  try {
+    $id = [string]$tag.id
+    $kind = [string]$tag.kind
+    $dk = [string]$tag.date
+    $d = Read-Data
+    if (-not $d) { return }
+    $col = if ($kind -eq 'event') { 'events' } else { 'longterm' }
+    $item = @($d.$col) | Where-Object { [string]$_.id -eq $id } | Select-Object -First 1
+    if (-not $item) { Log-Ui ("详情找不到记录 id=" + $id); return }
+    Show-Detail $item $kind $dk
+  } catch { Log-Ui ("Show-DetailById 失败: " + $_.Exception.Message) }
+}
+
 function Show-Detail($ev, [string]$kind, [string]$dateKey) {
-  $w = New-Object System.Windows.Window
-  $w.WindowStyle = 'None'; $w.AllowsTransparency = $true; $w.Background = 'Transparent'
-  $w.ShowInTaskbar = $false; $w.Topmost = ($Topmost -eq 'true')
-  $w.Width = 380; $w.Height = 300
-  $w.WindowStartupLocation = 'CenterOwner'
-  $w.Owner = $win
+  Log-Ui ("打开详情 kind=$kind id=" + [string]$ev.id)
+  $shell = New-DialogShell 380 330 ('详情')
+  $w = $shell.Win
+  $sp = $shell.Panel
 
-  $b = New-Object System.Windows.Controls.Border
-  $b.CornerRadius = New-Object System.Windows.CornerRadius 10
-  $b.Background = Brush '#F0142136'
-  $b.BorderBrush = Brush '#5964D2FF'
-  $b.BorderThickness = New-Object System.Windows.Thickness 1
-  $b.Padding = New-Object System.Windows.Thickness 12
-
-  $sp = New-Object System.Windows.Controls.StackPanel
-  $t = New-TextBlock ([string]$ev.title) 14 '#EAF1FF' 'Bold'
+  $t = New-TextBlock ([string]$ev.title) 13.5 '#EAF1FF' 'Bold'
   $sp.Children.Add($t) | Out-Null
 
   $meta = ''
-  if ($kind -eq 'event') { $meta = "$($ev.start) – $($ev.end)" }
-  else { if ($ev.due) { $meta = "DDL：$($ev.due)" } else { $meta = '没有明确 DDL' } }
+  if ($kind -eq 'event') { $meta = ([string]$ev.start) + ' – ' + ([string]$ev.end) }
+  else { if ($ev.due) { $meta = 'DDL：' + [string]$ev.due } else { $meta = '没有明确 DDL' } }
   $tm = New-TextBlock $meta 11 '#9FB4D6'
   $tm.Margin = New-Object System.Windows.Thickness 0,4,0,0
   $sp.Children.Add($tm) | Out-Null
 
   if ($ev.place) {
-    $tp = New-TextBlock ("地点：" + (Abbrev ([string]$ev.place))) 11 '#9FB4D6'
+    $tp = New-TextBlock ('地点：' + (Abbrev ([string]$ev.place))) 11 '#9FB4D6'
     $sp.Children.Add($tp) | Out-Null
   }
 
-  $lb = New-TextBlock '我的备注' 10.5 '#7F93B3'
-  $lb.Margin = New-Object System.Windows.Thickness 0,8,0,3
-  $sp.Children.Add($lb) | Out-Null
-
+  $sp.Children.Add((New-Lbl '我的备注')) | Out-Null
   $note = New-Object System.Windows.Controls.TextBox
   $note.Text = [string]$ev.note
-  $note.Height = 90
+  $note.Width = 340
+  $note.Height = 92
   $note.AcceptsReturn = $true
   $note.TextWrapping = 'Wrap'
   $note.Background = Brush '#22FFFFFF'
@@ -361,71 +374,100 @@ function Show-Detail($ev, [string]$kind, [string]$dateKey) {
   $note.FontSize = 12
   $sp.Children.Add($note) | Out-Null
 
+  $hint = New-TextBlock '' 10 '#FF9E9E'
+  $hint.Margin = New-Object System.Windows.Thickness 0,4,0,0
+  $sp.Children.Add($hint) | Out-Null
+
   $btns = New-Object System.Windows.Controls.StackPanel
   $btns.Orientation = 'Horizontal'
-  $btns.Margin = New-Object System.Windows.Thickness 0,10,0,0
+  $btns.Margin = New-Object System.Windows.Thickness 0,8,0,0
 
-  function New-Btn([string]$text, [scriptblock]$onClick) {
-    $btn = New-Object System.Windows.Controls.Button
-    $btn.Content = $text
-    $btn.Padding = New-Object System.Windows.Thickness 10,3,10,3
-    $btn.Margin = New-Object System.Windows.Thickness 0,0,6,0
-    $btn.Background = Brush '#3364D2FF'
-    $btn.Foreground = Brush '#EAF1FF'
-    $btn.BorderThickness = New-Object System.Windows.Thickness 0
-    $btn.FontSize = 11.5
-    $btn.Add_Click($onClick)
-    return $btn
+  $doneText = if ($kind -eq 'event') {
+    if ([string]$ev.doneOn -eq $dateKey) { '取消完成' } else { '今天完成' }
+  } else {
+    if ($ev.done) { '取消完成' } else { '完成' }
   }
 
-  $btnSave = New-Btn '保存备注' {
-    $d = Read-Data
-    $target = if ($kind -eq 'event') { $d.events | Where-Object { $_.id -eq $ev.id } } else { $d.longterm | Where-Object { $_.id -eq $ev.id } }
-    if ($target) { $target.note = $note.Text; Write-Data $d; Render }
-    $w.Close()
-  }
-  $btns.Children.Add($btnSave) | Out-Null
-
-  $btnDone = New-Btn ($(if ($kind -eq 'event') { if ($ev.doneOn -eq $dateKey) { '取消完成' } else { '今天完成' } } else { if ($ev.done) { '取消完成' } else { '完成' } })) {
-    $d = Read-Data
-    if ($kind -eq 'event') {
-      $target = $d.events | Where-Object { $_.id -eq $ev.id }
-      if ($target) {
-        if ($dateKey -and $target.doneOn -eq $dateKey) { $target.PSObject.Properties.Remove('doneOn') } else { $target | Add-Member -NotePropertyName doneOn -NotePropertyValue $dateKey -Force }
-      }
-    } else {
-      $target = $d.longterm | Where-Object { $_.id -eq $ev.id }
-      if ($target) { $target.done = -not $target.done }
-    }
-    Write-Data $d; Render; $w.Close()
-  }
-  $btns.Children.Add($btnDone) | Out-Null
-
-  $btnDel = New-Btn '删除' {
-    $d = Read-Data
-    if ($kind -eq 'event') { $d.events = @($d.events | Where-Object { $_.id -ne $ev.id }) }
-    else { $d.longterm = @($d.longterm | Where-Object { $_.id -ne $ev.id }) }
-    Write-Data $d; Render; $w.Close()
-  }
-  $btns.Children.Add($btnDel) | Out-Null
-
-  $btnClose = New-Btn '关闭' { $w.Close() }
-  $btns.Children.Add($btnClose) | Out-Null
-
+  $btnSave = New-DlgButton '保存备注' '#3364D2FF' 10
+  $btnDone = New-DlgButton $doneText
+  $btnEdit = New-DlgButton '编辑'
+  $btnDel = New-DlgButton '删除'
+  $btnClose = New-DlgButton '关闭'
+  foreach ($c in @($btnSave, $btnDone, $btnEdit, $btnDel, $btnClose)) { $btns.Children.Add($c) | Out-Null }
   $sp.Children.Add($btns) | Out-Null
-  $b.Child = $sp
-  $w.Content = $b
-  $w.Add_MouseLeftButtonDown({ try { (Get-Process -Id $PID).Refresh(); } catch {} })
+
+  $evId = [string]$ev.id
+  $dlgKind = $kind
+  $dk = $dateKey
+
+  $btnClose.Add_Click({ $w.Close() })
+
+  $btnSave.Add_Click({
+    try {
+      $d = Read-Data
+      $col = if ($dlgKind -eq 'event') { 'events' } else { 'longterm' }
+      $target = @($d.$col) | Where-Object { [string]$_.id -eq $evId } | Select-Object -First 1
+      if ($target) {
+        $target | Add-Member -NotePropertyName note -NotePropertyValue $note.Text -Force
+        Write-Data $d
+        Render
+        Log-Ui "备注已保存 $evId"
+      } else { $hint.Text = '找不到这条记录' }
+    } catch { $hint.Text = $_.Exception.Message; Log-Ui "保存备注失败: $($_.Exception.Message)" }
+  })
+
+  $btnDone.Add_Click({
+    try {
+      $d = Read-Data
+      $col = if ($dlgKind -eq 'event') { 'events' } else { 'longterm' }
+      $target = @($d.$col) | Where-Object { [string]$_.id -eq $evId } | Select-Object -First 1
+      if ($target) {
+        if ($dlgKind -eq 'event') {
+          $cur = [string]$target.doneOn
+          if ($cur -eq $dk) { $target.PSObject.Properties.Remove('doneOn') }
+          else { $target | Add-Member -NotePropertyName doneOn -NotePropertyValue $dk -Force }
+        } else {
+          $target | Add-Member -NotePropertyName done -NotePropertyValue (-not [bool]$target.done) -Force
+        }
+        Write-Data $d
+        Render
+        Log-Ui "完成状态已切换 $evId"
+        $w.Close()
+      }
+    } catch { $hint.Text = $_.Exception.Message; Log-Ui "切换完成失败: $($_.Exception.Message)" }
+  })
+
+  $btnEdit.Add_Click({
+    $w.Close()
+    Show-Editor $dlgKind $evId
+  })
+
+  $btnDel.Add_Click({
+    try {
+      $d = Read-Data
+      if ($dlgKind -eq 'event') {
+        $before = @($d.events).Count
+        $d.events = @(@($d.events) | Where-Object { [string]$_.id -ne $evId })
+        Log-Ui ("删除事件 $evId，$before -> " + @($d.events).Count)
+      } else {
+        $before = @($d.longterm).Count
+        $d.longterm = @(@($d.longterm) | Where-Object { [string]$_.id -ne $evId })
+        Log-Ui ("删除长期 $evId，$before -> " + @($d.longterm).Count)
+      }
+      Write-Data $d
+      Render
+      $w.Close()
+    } catch { $hint.Text = $_.Exception.Message; Log-Ui "删除失败: $($_.Exception.Message)" }
+  })
+
   $w.ShowDialog() | Out-Null
 }
-
-
 function Show-Settings {
   $w = New-Object System.Windows.Window
   $w.WindowStyle = 'None'; $w.AllowsTransparency = $true; $w.Background = 'Transparent'
   $w.ShowInTaskbar = $false; $w.Topmost = $true
   $w.Width = 320; $w.Height = 260
-  $w.WindowStartupLocation = 'CenterOwner'; $w.Owner = $win
+  $w.WindowStartupLocation = 'CenterOwner'; $w.Owner = $script:MainWin
 
   $b = New-Object System.Windows.Controls.Border
   $b.CornerRadius = New-Object System.Windows.CornerRadius 10
@@ -505,84 +547,234 @@ function Show-Settings {
   $w.ShowDialog() | Out-Null
 }
 
-function Show-QuickAdd {
-  $w = New-Object System.Windows.Window
-  $w.WindowStyle = 'None'; $w.AllowsTransparency = $true; $w.Background = 'Transparent'
-  $w.ShowInTaskbar = $false; $w.Topmost = $true
-  $w.Width = 420; $w.Height = 190
-  $w.WindowStartupLocation = 'CenterOwner'; $w.Owner = $win
+function New-Editor-Combo([int]$from, [int]$to, [string]$sel) {
+  $cb = New-Object System.Windows.Controls.ComboBox
+  $cb.Width = 62
+  $cb.Height = 26
+  $cb.FontSize = 12
+  $cb.Background = Brush '#22FFFFFF'
+  $cb.Foreground = Brush '#EAF1FF'
+  $cb.BorderThickness = New-Object System.Windows.Thickness 0
+  for ($i = $from; $i -le $to; $i++) {
+    [void]$cb.Items.Add((Pad2 $i))
+  }
+  if ($sel) { $cb.SelectedItem = $sel } else { $cb.SelectedIndex = 0 }
+  return $cb
+}
 
-  $b = New-Object System.Windows.Controls.Border
-  $b.CornerRadius = New-Object System.Windows.CornerRadius 10
-  $b.Background = Brush '#F0142136'
-  $b.BorderBrush = Brush '#5964D2FF'
-  $b.BorderThickness = New-Object System.Windows.Thickness 1
-  $b.Padding = New-Object System.Windows.Thickness 12
-  $sp = New-Object System.Windows.Controls.StackPanel
+function New-Lbl([string]$text) {
+  $l = New-TextBlock $text 10.5 '#7F93B3'
+  $l.Margin = New-Object System.Windows.Thickness 0,8,0,3
+  return $l
+}
 
-  $t = New-TextBlock '新增待办 —— 直接写一句人话' 12 '#EAF1FF' 'Bold'
-  $sp.Children.Add($t) | Out-Null
-  $hint = New-TextBlock '例：15号下午3点在图书馆交作业 / 明天9点到11点 东区414 数值分析' 10 '#7F93B3'
-  $hint.Margin = New-Object System.Windows.Thickness 0,3,0,6
+function New-Box([string]$value, [double]$width = 380, [double]$height = 26) {
+  $t = New-Object System.Windows.Controls.TextBox
+  $t.Text = [string]$value
+  $t.Width = $width
+  $t.Height = $height
+  $t.FontSize = 12
+  $t.Background = Brush '#22FFFFFF'
+  $t.Foreground = Brush '#EAF1FF'
+  $t.BorderThickness = New-Object System.Windows.Thickness 0
+  $t.Padding = New-Object System.Windows.Thickness 5,3,5,3
+  return $t
+}
+
+function New-DlgButton([string]$text, [string]$bg = '#22FFFFFF', [double]$pad = 12) {
+  $btn = New-Object System.Windows.Controls.Button
+  $btn.Content = $text
+  $btn.Padding = New-Object System.Windows.Thickness $pad,4,$pad,4
+  $btn.Margin = New-Object System.Windows.Thickness 8,0,0,0
+  $btn.Background = Brush $bg
+  $btn.Foreground = Brush '#EAF1FF'
+  $btn.BorderThickness = New-Object System.Windows.Thickness 0
+  $btn.FontSize = 12
+  return $btn
+}
+
+function New-DialogShell([double]$w, [double]$h, [string]$title) {
+  $win2 = New-Object System.Windows.Window
+  $win2.WindowStyle = 'None'
+  $win2.AllowsTransparency = $true
+  $win2.Background = 'Transparent'
+  $win2.ShowInTaskbar = $false
+  $win2.Topmost = $true
+  $win2.Width = $w
+  $win2.Height = $h
+  $win2.WindowStartupLocation = 'CenterOwner'
+  $win2.Owner = $script:MainWin
+  $border = New-Object System.Windows.Controls.Border
+  $border.CornerRadius = New-Object System.Windows.CornerRadius 10
+  $border.Background = Brush '#F0142136'
+  $border.BorderBrush = Brush '#5964D2FF'
+  $border.BorderThickness = New-Object System.Windows.Thickness 1
+  $border.Padding = New-Object System.Windows.Thickness 14
+  $panel = New-Object System.Windows.Controls.StackPanel
+  $head = New-TextBlock $title 13.5 '#EAF1FF' 'Bold'
+  $panel.Children.Add($head) | Out-Null
+  $border.Child = $panel
+  $win2.Content = $border
+  return @{ Win = $win2; Panel = $panel }
+}
+
+function Show-Editor([string]$kind, [string]$id) {
+  $isEvent = ($kind -eq 'event')
+  $d = Read-Data
+  if (-not $d) { return }
+  $item = $null
+  if ($id) {
+    if ($isEvent) { $item = @($d.events) | Where-Object { [string]$_.id -eq [string]$id } | Select-Object -First 1 }
+    else { $item = @($d.longterm) | Where-Object { [string]$_.id -eq [string]$id } | Select-Object -First 1 }
+  }
+
+  $cap = if ($id) { '编辑' } elseif ($isEvent) { '新增待办' } else { '新增长期任务' }
+  $shell = New-DialogShell 430 $(if ($isEvent) { 470 } else { 320 }) $cap
+  $w = $shell.Win
+  $sp = $shell.Panel
+
+  $sp.Children.Add((New-Lbl '标题')) | Out-Null
+  $tbTitle = New-Box ($(if ($item) { $item.title } else { '' })) 380
+  $sp.Children.Add($tbTitle) | Out-Null
+
+  $tbDate = $null; $cbSh = $null; $cbSm = $null; $cbEh = $null; $cbEm = $null
+  $tbPlace = $null; $tbRemind = $null; $cbRepeat = $null; $tbDue = $null
+
+  if ($isEvent) {
+    $sp.Children.Add((New-Lbl '日期')) | Out-Null
+    $tbDate = New-Box ($(if ($item) { $item.day } else { (DayKey (Get-Date)) })) 130
+    $sp.Children.Add($tbDate) | Out-Null
+
+    $sp.Children.Add((New-Lbl '时间（时 / 分：最上 00，最下 23 / 59）')) | Out-Null
+    $rowT = New-Object System.Windows.Controls.StackPanel
+    $rowT.Orientation = 'Horizontal'
+    $s0 = if ($item) { [string]$item.start } else { '08:00' }
+    $e0 = if ($item) { [string]$item.end } else { '09:00' }
+    $sp1 = $s0.Split(':'); $ep1 = $e0.Split(':')
+    $cbSh = New-Editor-Combo 0 23 $sp1[0]
+    $cbSm = New-Editor-Combo 0 59 $sp1[1]
+    $cbEh = New-Editor-Combo 0 23 $ep1[0]
+    $cbEm = New-Editor-Combo 0 59 $ep1[1]
+    $l1 = New-TextBlock '开始 ' 11 '#9FB4D6'; $l1.VerticalAlignment = 'Center'
+    $c1 = New-TextBlock ':' 12 '#9FB4D6'; $c1.VerticalAlignment = 'Center'; $c1.Margin = New-Object System.Windows.Thickness 2,0,2,0
+    $l2 = New-TextBlock '   结束 ' 11 '#9FB4D6'; $l2.VerticalAlignment = 'Center'
+    $c2 = New-TextBlock ':' 12 '#9FB4D6'; $c2.VerticalAlignment = 'Center'; $c2.Margin = New-Object System.Windows.Thickness 2,0,2,0
+    foreach ($c in @($l1, $cbSh, $c1, $cbSm, $l2, $cbEh, $c2, $cbEm)) { $rowT.Children.Add($c) | Out-Null }
+    $sp.Children.Add($rowT) | Out-Null
+
+    $sp.Children.Add((New-Lbl '地点')) | Out-Null
+    $tbPlace = New-Box ($(if ($item) { $item.place } else { '' })) 380
+    $sp.Children.Add($tbPlace) | Out-Null
+
+    $row2 = New-Object System.Windows.Controls.StackPanel
+    $row2.Orientation = 'Horizontal'
+    $r1 = New-TextBlock '提前分钟 ' 11 '#9FB4D6'; $r1.VerticalAlignment = 'Center'
+    $tbRemind = New-Box ($(if ($item -and $null -ne $item.remindMin) { [string]$item.remindMin } else { '15' })) 66
+    $r2 = New-TextBlock '   重复 ' 11 '#9FB4D6'; $r2.VerticalAlignment = 'Center'
+    $cbRepeat = New-Object System.Windows.Controls.ComboBox
+    $cbRepeat.Width = 96; $cbRepeat.Height = 26; $cbRepeat.FontSize = 12
+    $cbRepeat.Background = Brush '#22FFFFFF'
+    $cbRepeat.Foreground = Brush '#EAF1FF'
+    $cbRepeat.BorderThickness = New-Object System.Windows.Thickness 0
+    [void]$cbRepeat.Items.Add('只一次')
+    [void]$cbRepeat.Items.Add('每周')
+    if ($item -and $item.repeat -eq 'weekly') { $cbRepeat.SelectedIndex = 1 } else { $cbRepeat.SelectedIndex = 0 }
+    foreach ($c in @($r1, $tbRemind, $r2, $cbRepeat)) { $row2.Children.Add($c) | Out-Null }
+    $sp.Children.Add($row2) | Out-Null
+  } else {
+    $sp.Children.Add((New-Lbl '截止日期（YYYY-MM-DD，可空）')) | Out-Null
+    $tbDue = New-Box ($(if ($item) { $item.due } else { '' })) 170
+    $sp.Children.Add($tbDue) | Out-Null
+  }
+
+  $sp.Children.Add((New-Lbl '备注（写一句人话，点「识别」自动填上面）')) | Out-Null
+  $tbNote = New-Box ($(if ($item) { $item.note } else { '' })) 380 56
+  $tbNote.AcceptsReturn = $true
+  $tbNote.TextWrapping = 'Wrap'
+  $sp.Children.Add($tbNote) | Out-Null
+
+  $hint = New-TextBlock '' 10.5 '#64D2FF'
+  $hint.Margin = New-Object System.Windows.Thickness 0,4,0,0
   $sp.Children.Add($hint) | Out-Null
 
-  $tb = New-Object System.Windows.Controls.TextBox
-  $tb.Height = 34; $tb.FontSize = 13
-  $tb.Background = Brush '#22FFFFFF'; $tb.Foreground = Brush '#EAF1FF'; $tb.BorderThickness = 0
-  $tb.Padding = New-Object System.Windows.Thickness 6
-  $sp.Children.Add($tb) | Out-Null
-
-  $err = New-TextBlock '' 10.5 '#FF9E9E'
-  $err.Margin = New-Object System.Windows.Thickness 0,4,0,0
-  $sp.Children.Add($err) | Out-Null
-
   $btns = New-Object System.Windows.Controls.StackPanel
-  $btns.Orientation = 'Horizontal'; $btns.Margin = New-Object System.Windows.Thickness 0,8,0,0
-  $ok = New-Object System.Windows.Controls.Button
-  $ok.Content = '识别并添加'; $ok.Padding = New-Object System.Windows.Thickness 10,4,10,4
-  $ok.Background = Brush '#3364D2FF'; $ok.Foreground = Brush '#EAF1FF'; $ok.BorderThickness = 0; $ok.FontSize = 12
-  $btns.Children.Add($ok) | Out-Null
-  $cancel = New-Object System.Windows.Controls.Button
-  $cancel.Content = '取消'; $cancel.Padding = New-Object System.Windows.Thickness 10,4,10,4
-  $cancel.Margin = New-Object System.Windows.Thickness 6,0,0,0
-  $cancel.Background = Brush '#22FFFFFF'; $cancel.Foreground = Brush '#EAF1FF'; $cancel.BorderThickness = 0; $cancel.FontSize = 12
-  $btns.Children.Add($cancel) | Out-Null
-  $sp.Children.Add($btns) | Out-Null
-  $b.Child = $sp; $w.Content = $b
+  $btns.Orientation = 'Horizontal'
+  $btns.Margin = New-Object System.Windows.Thickness 0,10,0,0
 
-  $cancel.Add_Click({ $w.Close() })
-  $ok.Add_Click({
-    $text = $tb.Text.Trim()
-    if (-not $text) { $err.Text = '先写点什么'; return }
-    $parsed = $null
-    if ($script:ApiPort -gt 0) {
-      try {
-        $body = @{ text = $text } | ConvertTo-Json -Compress
-        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:ApiPort)/parse" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 3
-        $parsed = $resp
-      } catch { }
-    }
-    $d = Read-Data
-    $id = 'e' + [int64]((Get-Date).ToUniversalTime() - [datetime]'1970-01-01').TotalMilliseconds
-    $item = [pscustomobject]@{ id = $id; title = $text; day = (DayKey (Get-Date)); start = '09:00'; end = '10:00'; place = ''; color = 'blue'; remindMin = 15; repeat = 'none'; note = '' }
-    if ($parsed -and $parsed.ok) {
-      if ($parsed.title) { $item.title = [string]$parsed.title }
-      if ($parsed.date) { $item.day = [string]$parsed.date }
-      if ($parsed.start) { $item.start = [string]$parsed.start }
-      if ($parsed.end) { $item.end = [string]$parsed.end }
-      if ($parsed.place) { $item.place = [string]$parsed.place }
+  $btnParse = New-DlgButton '识别'
+  $btnSave = New-DlgButton '保存' '#3364D2FF' 14
+  $btnCancel = New-DlgButton '取消'
+  foreach ($c in @($btnParse, $btnSave, $btnCancel)) { $btns.Children.Add($c) | Out-Null }
+  $sp.Children.Add($btns) | Out-Null
+
+  $btnCancel.Add_Click({ $w.Close() })
+
+  $btnParse.Add_Click({
+    $txt = $tbNote.Text.Trim()
+    if (-not $txt) { $hint.Text = '先在备注里写一句'; return }
+    if ($script:ApiPort -le 0) { $hint.Text = '识别服务不可用（插件未运行）'; return }
+    try {
+      $body = @{ text = $txt } | ConvertTo-Json -Compress
+      $r = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:ApiPort)/parse" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 3
+      if ($r.ok) {
+        if ($r.title) { $tbTitle.Text = [string]$r.title }
+        if ($isEvent) {
+          if ($r.date) { $tbDate.Text = [string]$r.date }
+          if ($r.start) { $p = ([string]$r.start).Split(':'); $cbSh.SelectedItem = $p[0]; $cbSm.SelectedItem = $p[1] }
+          if ($r.end) { $p2 = ([string]$r.end).Split(':'); $cbEh.SelectedItem = $p2[0]; $cbEm.SelectedItem = $p2[1] }
+          if ($r.place) { $tbPlace.Text = [string]$r.place }
+        }
+        $hint.Text = '识别为：' + [string]$r.date + ' ' + [string]$r.start + '-' + [string]$r.end + ' ' + [string]$r.place + ' ' + [string]$r.title
+      } else { $hint.Text = '没认出时间或地点' }
+    } catch { $hint.Text = '识别服务出错' }
+  })
+
+  $btnSave.Add_Click({
+    $d2 = Read-Data
+    if (-not $d2) { return }
+    $t = $tbTitle.Text.Trim()
+    if (-not $t) { $hint.Text = '标题不能空'; return }
+    if ($isEvent) {
+      $target = $null
+      if ($id) { $target = @($d2.events) | Where-Object { [string]$_.id -eq [string]$id } | Select-Object -First 1 }
+      if (-not $target) {
+        $newId = 'e' + [int64]((Get-Date).ToUniversalTime() - [datetime]'1970-01-01').TotalMilliseconds
+        $target = [pscustomobject]@{ id = $newId }
+        $d2.events = @($d2.events) + $target
+      }
+      $target | Add-Member -NotePropertyName title -NotePropertyValue $t -Force
+      $dayVal = if ($tbDate.Text.Trim()) { $tbDate.Text.Trim() } else { DayKey (Get-Date) }
+      $target | Add-Member -NotePropertyName day -NotePropertyValue $dayVal -Force
+      $target | Add-Member -NotePropertyName start -NotePropertyValue ([string]$cbSh.SelectedItem + ':' + [string]$cbSm.SelectedItem) -Force
+      $target | Add-Member -NotePropertyName end -NotePropertyValue ([string]$cbEh.SelectedItem + ':' + [string]$cbEm.SelectedItem) -Force
+      $target | Add-Member -NotePropertyName place -NotePropertyValue $tbPlace.Text.Trim() -Force
+      $rem = 15
+      if ($tbRemind.Text -match '^\d+$') { $rem = [int]$tbRemind.Text }
+      $target | Add-Member -NotePropertyName remindMin -NotePropertyValue $rem -Force
+      $rep = if ($cbRepeat.SelectedIndex -eq 1) { 'weekly' } else { 'none' }
+      $target | Add-Member -NotePropertyName repeat -NotePropertyValue $rep -Force
+      $target | Add-Member -NotePropertyName note -NotePropertyValue $tbNote.Text -Force
+      if (-not ($target.PSObject.Properties.Name -contains 'color')) { $target | Add-Member -NotePropertyName color -NotePropertyValue 'blue' -Force }
     } else {
-      $err.Text = '识别服务不可用，已按「今天 09:00」添加，之后可右键编辑'
+      $target = $null
+      if ($id) { $target = @($d2.longterm) | Where-Object { [string]$_.id -eq [string]$id } | Select-Object -First 1 }
+      if (-not $target) {
+        $newId = 'l' + [int64]((Get-Date).ToUniversalTime() - [datetime]'1970-01-01').TotalMilliseconds
+        $target = [pscustomobject]@{ id = $newId; done = $false }
+        $d2.longterm = @($d2.longterm) + $target
+      }
+      $target | Add-Member -NotePropertyName title -NotePropertyValue $t -Force
+      $target | Add-Member -NotePropertyName due -NotePropertyValue $tbDue.Text.Trim() -Force
+      $target | Add-Member -NotePropertyName note -NotePropertyValue $tbNote.Text -Force
+      if (-not ($target.PSObject.Properties.Name -contains 'done')) { $target | Add-Member -NotePropertyName done -NotePropertyValue $false -Force }
     }
-    $d.events = @($d.events) + $item
-    Write-Data $d
+    Write-Data $d2
     Render
     $w.Close()
   })
+
   $w.ShowDialog() | Out-Null
 }
-
-# ───────────── 提醒 ─────────────
 function Play-Chime([bool]$urgent) {
   if ($script:Silent) { return }
   try {
@@ -703,7 +895,8 @@ $win.Add_LocationChanged({
     $script:LocTimer.Start()
   } catch { }
 })
-$BtnAdd.Add_Click({ Show-QuickAdd })
+$BtnAdd.Add_Click({ Show-Editor 'event' $null })
+$BtnAdd.Add_MouseRightButtonUp({ Show-Editor 'long' $null })
 $BtnCfg.Add_Click({ Show-Settings })
 $BtnClose.Add_Click({ $win.Hide() })
 

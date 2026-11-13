@@ -9,20 +9,27 @@
 - 单击任意一条 → 看/改备注、标记完成、删除
 - 标题栏 **＋** → 一句话快速新增（`15号下午3点在图书馆交作业` 这种）
 
-## 实现方式（重要）
+## 实现方式
 
-DSH 的插件宿主跑在 `ELECTRON_RUN_AS_NODE` 模式里，**拿不到 `app` / `BrowserWindow`**，所以插件没法自己开 Electron 窗口。
+界面是 **Electron** 挂件（`app/`，无边框 + 透明 + 沉底），插件只负责找到一份 Electron 二进制并把它拉起来、崩了重启。
 
-这个插件用的是：
+为什么插件不自己开窗口：DSH 的插件宿主跑在 `ELECTRON_RUN_AS_NODE` 模式（`dsh-desktop-host`），进程里没有 `app` / `BrowserWindow`。
 
-| 部分 | 技术 | 说明 |
+Electron 搜索顺序：
+
+1. 配置项 `electronPath`
+2. 环境变量 `DESH_DESK_TODO_ELECTRON`（见下方示例）
+3. `$DSH_HOME/data/surfcore/pet/runtime/electron-<ver>/electron.exe`（装了桌宠插件就有）
+4. `%LOCALAPPDATA%\Programs\electron\electron.exe`
+
+都找不到时**自动退回 WPF 版本**（`win/desk-todo.ps1`，Windows 自带，不需要 Electron，界面是同一套布局的简化实现）。
+
+| 层 | 技术 | 说明 |
 |---|---|---|
-| 界面 | **WPF**（PowerShell + XAML） | Windows 自带，零额外运行时、零依赖 |
-| 提醒/弹窗 | WPF 窗口 + `SoundPlayer` | 不吃系统通知权限 |
-| 一句话识别 | Node 里的正则解析器 | 插件起一个 `127.0.0.1` 的临时端口供界面调用 |
-| 数据 | `$DSH_HOME/desk-todo/data.json` | 纯文本，界面每 3 秒看一次改动 |
-
-要求：**Windows**（Windows 10/11 自带 PowerShell 5.1 与 WPF）。
+| 界面 | Electron（首选）/ WPF（退路） | 无边框透明窗口 |
+| 提醒 | 自绘弹窗 + `SoundPlayer` / `Notification` | 不吃系统通知权限 |
+| 一句话识别 | Node 正则解析器（`lib/parse.js`） | 通过 `127.0.0.1` 临时端口给界面调用 |
+| 数据 | `$DSH_HOME/desk-todo/data.json` | 纯文本，改完自动刷新 |
 
 ## 安装
 

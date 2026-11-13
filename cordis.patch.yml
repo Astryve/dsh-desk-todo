@@ -10,6 +10,7 @@
     - id: desk-todo
       name: 'dsh-desk-todo'
       config:
+        electronPath: ''     # 留空 = 自动查找；找不到会退回 WPF 版本
         width: 520            # 首次创建的宽度（之后跟随 data.json 里记住的尺寸）
         height: 330
         opacity: 0.85         # 背景不透明度 0.25 ~ 0.95
