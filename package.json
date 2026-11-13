@@ -1,6 +1,6 @@
 {
   "name": "dsh-desk-todo",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "DSH 桌面待办挂件：Electron 透明窗口（找不到 Electron 时自动退回 WPF），到点弹窗 + 提示音提醒。",
   "type": "module",
   "main": "lib/index.js",
@@ -45,5 +45,14 @@
   },
   "os": [
     "win32"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Astryve/dsh-desk-todo.git"
+  },
+  "homepage": "https://github.com/Astryve/dsh-desk-todo#readme",
+  "bugs": {
+    "url": "https://github.com/Astryve/dsh-desk-todo/issues"
+  },
+  "author": "astryve"
 }

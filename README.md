@@ -33,20 +33,43 @@ Electron 搜索顺序：
 
 ## 安装
 
+### 方式一：从 npm（推荐）
+
 ```bash
 dsh plugin --profile desktop add dsh-desk-todo
-# 或者
+```
+
+- npm 页面：https://www.npmjs.com/package/dsh-desk-todo
+- 当前版本：`2.0.0`，发布者 `astryve`
+- 也可以直接在 DSH 插件市场搜索 **待办 / todo / desk**
+
+### 方式二：从 GitHub
+
+```bash
 dsh plugin --profile desktop add github:Astryve/dsh-desk-todo
 ```
 
-装完**重启 DSH**，挂件会出现在屏幕右上角。
+适合想跟最新提交（可能比 npm 版本新）的人。
 
-本地开发：
+### 方式三：本地源码
 
 ```bash
 git clone https://github.com/Astryve/dsh-desk-todo
 dsh plugin --profile desktop add link:/绝对路径/dsh-desk-todo
 ```
+
+装完**重启 DSH**（插件在启动时加载），挂件出现在屏幕右上角。
+
+## 机器要求
+
+| 项 | 要求 |
+|---|---|
+| 系统 | **Windows 10 / 11**（用的是 Win32 窗口 + PowerShell） |
+| DSH | 桌面版（Web 版没有桌面窗口，装了也看不到） |
+| Electron | 有最好（界面是 Electron 版）；没有会自动退回 WPF 版 |
+| Node | 不需要你装，DSH 自带 |
+
+Electron 从哪来：如果你装过 `桌宠` 这类插件，它的运行目录里就有一份；插件会自动找到。找不到也不影响使用，只是界面换成 WPF 实现。
 
 ## 第一次打开
 
@@ -93,9 +116,13 @@ dsh plugin --profile desktop add link:/绝对路径/dsh-desk-todo
 | 操作 | 效果 |
 |---|---|
 | 拖标题栏 | 移动（位置自动记住） |
-| 点 ＋ | 快速新增 |
-| 点 － | 隐藏（插件仍在跑，重启 DSH 会回来） |
-| 点条目 | 详情：备注、完成、删除 |
+| 左键 **＋** | 新增待办（日期 / 时间 / 地点 / 提前提醒 / 重复 / 备注） |
+| **右键 ＋** | 新增长期任务（标题 + DDL） |
+| **⚙** | 尺寸、背景不透明度 |
+| **－** | 隐藏（插件仍在跑，重启 DSH 会回来） |
+| 点条目 | 详情：改备注、标记完成、编辑、删除 |
+
+编辑框里的**备注**可以写一句人话，点「识别」自动拆成日期/时间/地点/标题。
 
 ## 数据格式
 
@@ -141,19 +168,52 @@ dsh plugin --profile desktop add link:/绝对路径/dsh-desk-todo
 ## 常见问题
 
 **装完没看到？**
-① 重启 DSH 了吗；② 挂件默认沉在最底层，最小化其它窗口才看得到；③ 打开 `%TEMP%\desk-todo-load.txt`，没有 `spawned powershell pid=...` 就是插件没被加载。
+
+1. 重启 DSH 了吗（插件只在启动时加载）
+2. 挂件默认沉在最底层，最小化其它窗口才看得到
+3. 打开 `%TEMP%\desk-todo-load.txt` 看：
+   - `api 端口=...` + `spawned electron pid=...` → 插件起来了，窗口被别的窗口盖住
+   - `没找到 Electron，退回 WPF` → 用的是 WPF 版，界面会简化
+   - 文件不存在 → 插件没被加载，跑 `dsh plugin list` 检查
 
 **弹窗不响？**
-配置里 `silent: true` 关了声音，或系统音量/输出设备不对。
+配置里 `silent: true` 关了声音，或系统音量 / 输出设备不对。
 
 **能改窗口大小吗？**
-改 `data.json` 里 `settings.w/h`，或配置里 `width/height`（只影响首次创建）。
+点 ⚙ 直接改；或改 `data.json` 里 `settings.w/h`。配置里的 `width/height` 只影响首次创建。
 
 **数据会不会丢？**
-不会，全在 `data.json`；卸载插件不删数据。
+不会，全在 `data.json`；卸载插件不删数据。想备份就复制这个文件。
+
+**在插件市场搜不到？**
+市场是定期扫 npm 上带 `dsh-plugin` 关键词的包，新包要等几小时到一天。着急就直接用命令装。
 
 **非 Windows？**
-WPF 只有 Windows 有，这个版本不支持 macOS / Linux。
+这个版本只支持 Windows（桌面窗口用 Win32 + PowerShell）。
+
+## 更新与卸载
+
+```bash
+# 更新到最新版
+dsh plugin --profile desktop add dsh-desk-todo@latest
+
+# 卸载（数据保留）
+dsh plugin --profile desktop remove dsh-desk-todo
+```
+
+## 版本
+
+| 版本 | 变化 |
+|---|---|
+| 2.0.0 | 回到 Electron 实现（插件负责找 Electron 并拉起），WPF 作为找不到时的退路；发布到 npm |
+| 1.1.1 | WPF 版：补设置按钮、悬停、阴影 |
+| 1.0.0 | 首个版本（Electron 独立程序形态） |
+
+## 相关链接
+
+- GitHub：https://github.com/Astryve/dsh-desk-todo
+- npm：https://www.npmjs.com/package/dsh-desk-todo
+- 问题反馈：https://github.com/Astryve/dsh-desk-todo/issues
 
 ## License
 
